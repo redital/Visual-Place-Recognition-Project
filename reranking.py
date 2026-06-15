@@ -46,11 +46,28 @@ def main(args):
         geo_dists = torch.tensor(get_list_distances_from_preds(txt_file_query))[:num_preds]
         torch_file_query = inliers_folder.joinpath(Path(txt_file_query).name.replace('txt', 'torch'))
         query_results = torch.load(torch_file_query, weights_only=False)
-        query_db_inliers = torch.zeros(num_preds, dtype=torch.float32)
+
+        inlier_counts = torch.full((num_preds,), -1.0, dtype=torch.float32)
         for i in range(num_preds):
-            query_db_inliers[i] = query_results[i]['num_inliers']
-        query_db_inliers, indices = torch.sort(query_db_inliers, descending=True)
-        geo_dists = geo_dists[indices]
+            try:
+                inlier_counts[i] = float(query_results[i]['num_inliers'])
+            except (IndexError, KeyError):
+                pass
+
+        # Separiamo processati (inliers >= 0) da saltati (-1)
+        processed_mask = inlier_counts >= 0
+        processed_indices = torch.where(processed_mask)[0]
+        unprocessed_indices = torch.where(~processed_mask)[0]
+
+        if len(processed_indices) > 0:
+            # Ordiniamo i processati per numero di inliers
+            sub_inliers = inlier_counts[processed_indices]
+            _, sort_idx = torch.sort(sub_inliers, descending=True)
+            sorted_processed = processed_indices[sort_idx]
+            
+            # Nuovo ordine: processati ordinati + saltati nel loro ordine originale
+            final_indices = torch.cat([sorted_processed, unprocessed_indices])
+            geo_dists = geo_dists[final_indices]
         
         for i, n in enumerate(recall_values):
             if torch.any(geo_dists[:n] <= threshold):
@@ -59,7 +76,6 @@ def main(args):
 
     recalls = recalls / total_queries * 100
     recalls_str = ", ".join([f"R@{val}: {rec:.1f}" for val, rec in zip(recall_values, recalls)])
-
     print(recalls_str)
 
 if __name__ == "__main__":

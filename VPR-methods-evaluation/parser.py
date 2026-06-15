@@ -96,6 +96,13 @@ def parse_arguments():
         action="store_true",
         help="set to True if you want to save the data for uncertainty estimation",
     )
+    parser.add_argument(
+        "--metric",
+        type=str,
+        default="L2",
+        choices=["L2", "IP"],
+        help="(optional) set to L2 to use L2 distance, IP for dot product. If not provided L2 will be used",
+    )
     args = parser.parse_args()
 
     args.use_labels = not args.no_labels
